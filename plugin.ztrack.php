@@ -120,8 +120,20 @@ function zt_onPlayerConnect($aseco, $player) {
     // Display a message to the connecting player about zTrack
     $aseco->client->query('ChatSendServerMessageToLogin', $aseco->formatColors('{#server}>> {#message}This server is running zTrack, type {#highlite}/ztrack {#message}for more information'), $player->login);
 
-    // Send a default manialink to the connecting player
-    zt_SendML($aseco, $player->login, false);
+    // Check if the player is initially in spectator mode
+	$playerInfo = property_exists($player, 'player_info') ? $player->player_info : [];
+    if (isset($playerInfo['SpectatorStatus']) && $playerInfo['SpectatorStatus'] != 0) {
+        $initialSpectatorStatus = $playerInfo['SpectatorStatus'];
+        $playerID = floor($initialSpectatorStatus / 10000);
+        $targetLogin = zt_IDtoLogin($aseco, $playerID);
+        $aseco->client->query('ChatSendServerMessageToLogin', $aseco->formatColors('{#message}[zTrack]: CP-tracking enabled for {#highlite}' . $targetLogin), $player->login);
+        $zt_array[$player->login]['Mode'] = ''; // Set initial mode as empty
+        $zt_array[$player->login]['Target'] = $targetLogin;
+        zt_SendML($aseco, $player->login, false);
+    } else {
+        // Send a default manialink to the connecting player
+        zt_SendML($aseco, $player->login, false);
+    }
 }
 
 // Function to handle the 'onPlayerInfoChanged' event
@@ -161,7 +173,7 @@ function zt_onCheckpoint($aseco, $command)
 
     foreach ($zt_array as $login => $info) {
         if (!empty($info['Target']) && $info['Target'] == $command[1]) {
-            if ($info['Mode'] == 'Dedi') {
+            if (isset($info['Mode']) && $info['Mode'] == 'Dedi') {
                 $dedi_rec = $dedi_db['Challenge']['Records'][$info['Rec']]['Checks'];
                 $local_time = $cpll_array[$info['Target']]['time'];
                 $dedi_time = $dedi_rec[$cpll_array[$info['Target']]['cp'] - 1];
@@ -170,7 +182,7 @@ function zt_onCheckpoint($aseco, $command)
 
                 $zt_delta = $login == $info['Target'] ? $zt_delta : -1 * $zt_delta;
                 zt_SendML($aseco, $login, $zt_delta);
-            } elseif ($info['Mode'] == 'Local') {
+            } elseif (isset($info['Mode']) && $info['Mode'] == 'Local') {
                 $local_time = $cpll_array[$info['Target']]['time'];
                 $record_time = $aseco->server->records->record_list[$info['Rec']]->checks[$cpll_array[$info['Target']]['cp'] - 1];
 
